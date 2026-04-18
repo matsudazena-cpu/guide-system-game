@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>塔 - 哨兵预约管理中心 v1.2</title>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --container-bg: #161b22;
+            --text-color: #c9d1d9;
+            --sub-text: #8b949e;
+            --accent-color: #58a6ff;
+            --danger-color: #f85149;
+            --success-color: #3fb950;
+            --border-color: #30363d;
+            --card-active: #21262d;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'PingFang SC', 'Courier New', monospace;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 注册界面（同前，默认可见） */
+        #registration-overlay {
+            width: 400px; padding: 30px; background: var(--container-bg); border: 1px solid var(--border-color); box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center;
+        }
+        .input-group { margin: 20px 0; text-align: left; }
+        input, select { width: 100%; padding: 10px; background: #0d1117; border: 1px solid var(--border-color); color: var(--text-color); box-sizing: border-box; margin-top: 5px; }
+
+        /* 游戏主体容器（默认隐藏） */
+        #game-container {
+            display: none;
+            flex-direction: column;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        header { padding: 10px 20px; background: var(--container-bg); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;}
+        .stat-group span { margin-right: 15px; }
+
+        main { display: flex; flex: 1; overflow: hidden; }
+
+        /* 左侧已选定哨兵列表 */
+        #active-list {
+            width: 300px;
+            border-right: 1px solid var(--border-color);
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .active-card {
+            padding: 10px; border: 1px solid var(--border-color); margin-bottom: 10px; cursor: pointer; border-radius: 4px; transition: 0.2s;
+        }
+        .active-card:hover { background: #1f242c; }
+        .active-card.selected { border-color: var(--accent-color); background: var(--card-active); }
+
+        /* 控制台 */
+        #console { flex: 1; display: flex; flex-direction: column; padding: 20px; }
+        #log-area { flex: 1; background: #010409; border: 1px solid var(--border-color); padding: 15px; overflow-y: auto; margin-bottom: 20px; font-size: 14px; line-height: 1.6; }
+        .log-entry { margin-bottom: 8px; border-bottom: 1px dotted var(--border-color); padding-bottom: 2px; }
+
+        /* 统一按钮样式 */
+        .action-bar { display: flex; gap: 10px; }
+        button { background: #21262d; color: var(--text-color); border: 1px solid var(--border-color); padding: 8px 16px; cursor: pointer; border-radius: 6px; font-size: 14px; }
+        button.primary { background: var(--accent-color); color: white; border: none; }
+        button.danger { background: rgba(248,81,73,0.1); color: var(--danger-color); border: 1px solid var(--danger-color); }
+        button:hover { background: #30363d; }
+        button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        /* ============================ */
+        /* 新增：本日预约列表模块设计 */
+        /* ============================ */
+        #appointment-overlay {
+            display: none; /* 默认隐藏 */
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 999;
+            justify-content: center; align-items: center;
+        }
+
+        #appointment-window {
+            width: 700px; height: 80vh;
+            background: #1c2128;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.6);
+        }
+
+        #appointment-header {
+            padding: 15px 20px; background: var(--container-bg); border-bottom: 1px solid var(--border-color);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        #appointment-list-area {
+            flex: 1; overflow-y: auto; padding: 20px;
+        }
+
+        /* 预约卡片样式（参考你的截图） */
+        .appointment-card {
+            border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 15px; padding: 15px;
+            background: #21262d;
+            position: relative;
+        }
+
+        .ap-header {
+            display: flex; justify-content: space-between; border-bottom: 1px solid #30363d; padding-bottom: 5px; margin-bottom: 10px;
+        }
+
+        .ap-name { font-size: 16px; font-weight: bold; color: var(--text-color); }
+        .ap-level { font-size: 12px; color: var(--accent-color); border: 1px solid var(--accent-color); padding: 2px 5px; border-radius: 3px; margin-left: 5px; }
+
+        .ap-stats-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 20px; font-size: 12px; color: var(--text-color);
+        }
+
+        .ap-stat-row { display: flex; justify-content: space-between; align-items: center; }
+        .ap-stat-label { color: var(--sub-text); }
+        .ap-trait { background: rgba(201,209,217,0.1); padding: 1px 4px; border-radius: 3px; }
+
+        .ap-progress-group { grid-column: span 2; margin-top: 5px; }
+
+        .ap-actions {
+            position: absolute; top: 15px; right: 15px; display: flex; flex-direction: column; gap: 5px;
+        }
+        
+        /* 稳定性进度条 */
+        .stab-p-bar { height: 4px; background: #30363d; margin-top: 5px; }
+        .stab-p-fill { height: 100%; background: var(--success-color); transition: width 0.3s; }
+        .critical-fill { background: var(--danger-color); animation: pulse 1s infinite; }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
+    </style>
+</head>
+<body>
+
+<div id="registration-overlay">
+    <h2 style="color: var(--accent-color)">白塔向导身份注册</h2>
+    <div class="input-group">
+        <label>向导姓名:</label>
+        <input type="text" id="reg-name" placeholder="请输入您的姓名..." required>
+    </div>
+    <div class="input-group">
+        <label>所属扇区:</label>
+        <select id="reg-sector">
+            <option value="中央塔 (Central)">中央塔 (Central Tower)</option>
+            <option value="后勤部 (Support)">后勤部 (Support)</option>
+        </select>
+    </div>
+    <button class="primary" style="width: 100%" onclick="completeRegistration()">激活身份并入职</button>
+</div>
+
+<div id="appointment-overlay">
+    <div id="appointment-window">
+        <div id="appointment-header">
+            <h3 style="margin:0;">白塔本日预约申请列表</h3>
+            <div style="font-size: 12px;">第 <span id="ap-day-count">1</span> 天 - 日报</div>
+        </div>
+        <div id="appointment-list-area">
+            </div>
+        <div style="padding: 10px; border-top: 1px solid #30363d; text-align: right; background: #161b22;">
+            <button class="primary" onclick="closeAppointmentOverlay()">提交申请批复</button>
+        </div>
+    </div>
+</div>
+
+<div id="game-container">
+    <header>
+        <div class="stat-group">
+            向导: <span id="guide-name-display" style="color: var(--accent-color)">-</span>
+            扇区: <span id="guide-sector-display">-</span>
+            精力: <span id="guide-energy">100</span>/100
+            信用点: <span id="guide-credits">200</span>
+        </div>
+        <div>第 <span id="day-count">1</span> 天</div>
+    </header>
+
+    <main>
+        <div id="active-list">
+            <div style="font-size: 12px; color: #8b949e; margin-bottom: 10px; text-align: center;">--- 本日待处理哨兵 ---</div>
+            <div id="active-sentinels-content"></div>
+        </div>
+
+        <div id="console">
+            <div id="log-area"></div>
+            <div class="action-bar">
+                <button id="btn-soothe" class="primary" onclick="handleSoothe()" disabled>精神梳理 (-10精力)</button>
+                <button id="btn-next-day" onclick="nextDay()">结束本日工作</button>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    let guide = { name: "", sector: "", energy: 100, credits: 200, day: 1 };
+    
+    // 初始化一些哨兵池数据用于预约生成
+    let sentinelsPool = [
+        { id: 101, name: "雷恩", level: "C级", sex: "男", age: 31, animal: "雪豹", trait: "暴躁", compatibility: 77, affection: 72, stability: 80, binding: false },
+        { id: 102, name: "凯斯", level: "D级", sex: "男", age: 29, animal: "灰狼", trait: "敏感", compatibility: 45, affection: 68, stability: 45, binding: false },
+        { id: 103, name: "莫尔", level: "C级", sex: "男", age: 26, animal: "响尾蛇", trait: "冷静", compatibility: 54, affection: 29, stability: 20, binding: false }
+    ];
+
+    let currentDayAppointments = []; // 本日生成的申请人
+    let currentActiveSentinels = []; // 同意梳理的哨兵
+
+    let selectedId = null;
+
+    // --- 注册逻辑 ---
+    function completeRegistration() {
+        const nameInput = document.getElementById('reg-name').value;
+        const sectorInput = document.getElementById('reg-sector').value;
+        if (!nameInput) { alert("白塔需要您的真实姓名。"); return; }
+        guide.name = nameInput; guide.sector = sectorInput;
+        document.getElementById('registration-overlay').style.display = 'none';
+        document.getElementById('game-container').style.display = 'flex';
+        document.getElementById('guide-name-display').innerText = guide.name;
+        document.getElementById('guide-sector-display').innerText = guide.sector;
+        log(`身份校验通过。欢迎，扇区 ${guide.name} 向导。`);
+        // 首次启动，生成预约
+        generateAppointments();
+    }
+
+    // --- 生成预约列表逻辑 ---
+    function generateAppointments() {
+        // 模拟生成2-3条预约（这里简单复制池数据）
+        currentDayAppointments = JSON.parse(JSON.stringify(sentinelsPool));
+        renderAppointmentOverlay();
+        document.getElementById('appointment-overlay').style.display = 'flex';
+        document.getElementById('ap-day-count').innerText = guide.day;
+    }
+
+    // 渲染预约界面（详尽模式，参考截图）
+    function renderAppointmentOverlay() {
+        const list = document.getElementById('appointment-list-area');
+        list.innerHTML = '';
+        currentDayAppointments.forEach(s => {
+            const card = document.createElement('div');
+            card.className = 'appointment-card';
+            
+            // 稳定性进度条状态
+            let stabClass = s.stability < 30 ? 'critical-fill' : '';
+            
+            card.innerHTML = `
+                <div class="ap-header">
+                    <div>
+                        <span class="ap-name">${s.name}</span>
+                        <span class="ap-level">${s.level}</span>
+                    </div>
+                </div>
+
+                <div class="ap-stats-grid">
+                    <div class="ap-stat-row"><span class="ap-stat-label">性别：</span><span>${s.sex}</span></div>
+                    <div class="ap-stat-row"><span class="ap-stat-label">年龄：</span><span>${s.age}</span></div>
+                    <div class="ap-stat-row"><span class="ap-stat-label">精神体：</span><span>${s.animal}</span></div>
+                    <div class="ap-stat-row"><span class="ap-stat-label">性格：</span><span class="ap-trait">${s.trait}</span></div>
+                    <div class="ap-stat-row"><span class="ap-stat-label">好感度：</span><span>${s.affection}%</span></div>
+                    <div class="ap-stat-row"><span class="ap-stat-label">匹配度：</span><span>${s.compatibility}%</span></div>
+                    
+                    <div class="ap-progress-group">
+                        <div style="display: flex; justify-content: space-between; align-items: center">
+                            <span class="ap-stat-label">稳定性：</span>
+                            <span style="font-size: 11px;">${s.stability.toFixed(0)}%</span>
+                        </div>
+                        <div class="stab-p-bar"><div class="stab-p-fill ${stabClass}" style="width: ${s.stability}%"></div></div>
+                    </div>
+                </div>
+
+                <div class="ap-actions">
+                    <button class="primary" onclick="approveAppointment(${s.id})" style="font-size:12px;">梳理梳理</button>
+                    <button class="danger" onclick="bindSentinel(${s.id})" style="font-size:12px; opacity:0.6;">长期绑定</button>
+                    <button class="danger" onclick="rejectAppointment(${s.id})" style="font-size:11px;">拒绝预约</button>
+                </div>
+            `;
+            list.appendChild(card);
+        });
+    }
+
+    // 同意预约申请
+    function approveAppointment(id) {
+        let apIndex = currentDayAppointments.findIndex(ap => ap.id === id);
+        if (apIndex > -1) {
+            let s = currentDayAppointments.splice(apIndex, 1)[0];
+            currentActiveSentinels.push(s); // 加入今日待处理列表
+            renderAppointmentOverlay();
+            log(`已同意 ${s.name} 的本日安抚申请。请在操作台开始梳理。`);
+        }
+    }
+
+    // 绑定申请 (这里增加简单的检查)
+    function bindSentinel(id) {
+        let ap = currentDayAppointments.find(item => item.id === id);
+        if (ap.affection < 70) {
+            alert(`警告：白塔提示，哨兵 ${ap.name} 对您的好感度尚未达到契约签订的最低标准（70%）。`);
+            return;
+        }
+        alert(`恭喜！哨兵 ${ap.name} 接受了您的精神触手，你们现在建立了精神契约。`);
+        log(`[Binding] 您已与哨兵 ${ap.name} 建立长期绑定关系。`);
+        // 绑定后移入活跃列表
+        approveAppointment(id);
+    }
+
+    function rejectAppointment(id) {
+        let apIndex = currentDayAppointments.findIndex(ap => ap.id === id);
+        if (apIndex > -1) {
+            let s = currentDayAppointments.splice(apIndex, 1)[0];
+            renderAppointmentOverlay();
+            log(`已拒绝 ${s.name} 的本日预约。哨兵可能感到有些失望。`);
+        }
+    }
+
+    // 关闭预约遮罩，更新活跃列表
+    function closeAppointmentOverlay() {
+        document.getElementById('appointment-overlay').style.display = 'none';
+        renderActiveSentinels();
+    }
+
+    // --- 活跃哨兵管理 ---
+    function renderActiveSentinels() {
+        const list = document.getElementById('active-sentinels-content');
+        list.innerHTML = '';
+        currentActiveSentinels.forEach(s => {
+            const card = document.createElement('div');
+            card.className = `active-card ${s.id === selectedId ? 'selected' : ''}`;
+            if (s.stability < 30) card.style.borderColor = "var(--danger-color)";
+            card.onclick = () => { selectedId = s.id; document.getElementById('btn-soothe').disabled = false; renderActiveSentinels(); };
+            card.innerHTML = `<strong>${s.name} (${s.animal})</strong><div style="font-size:11px;">稳定性: ${s.stability.toFixed(0)}%</div>`;
+            list.appendChild(card);
+        });
+    }
+
+    // --- 安抚梳理 ---
+    function handleSoothe() {
+        if (!selectedId) return;
+        let s = currentActiveSentinels.find(item => item.id === selectedId);
+        // 恢复值公式：15 * (匹配度/100)
+        let recovery = 15 * (s.compatibility / 100);
+        s.stability = Math.min(100, s.stability + recovery);
+        
+        guide.energy -= 10;
+        guide.credits += 20;
+
+        log(`你引导精神触手进入了 ${s.name} 的意识图景，梳理异常，稳定性回升至 ${s.stability.toFixed(0)}%。`);
+        
+        // 处理完毕后移出列表
+        currentActiveSentinels = currentActiveSentinels.filter(item => item.id !== selectedId);
+        selectedId = null;
+        document.getElementById('btn-soothe').disabled = true;
+
+        updateStats();
+        renderActiveSentinels();
+    }
+
+    // --- 日结 ---
+    function nextDay() {
+        if (currentActiveSentinels.length > 0) {
+            if (!confirm(`警告：您今天还有哨兵没有梳理完。结束本日工作会导致他们状态严重下降。确定要离岗吗？`)) return;
+        }
+
+        guide.day++;
+        guide.energy = 100;
+        // 模拟池中的哨兵状态自动下降
+        sentinelsPool.forEach(s => s.stability -= (10 + Math.random()*10));
+        // 移除已经失控的哨兵
+        sentinelsPool = sentinelsPool.filter(s => s.stability > 0);
+
+        log(`--- 第 ${guide.day} 天清晨，白塔终端激活。 ---`);
+        
+        updateStats();
+        // 清空今日列表
+        currentDayAppointments = [];
+        currentActiveSentinels = [];
+        selectedId = null;
+
+        // 生成下一天的预约
+        generateAppointments();
+    }
+
+    // --- 工具函数 ---
+    function log(msg) {
+        const area = document.getElementById('log-area');
+        const entry = document.createElement('div');
+        entry.className = "log-entry";
+        entry.innerHTML = `[G-log] ${msg}`;
+        area.appendChild(entry);
+        area.scrollTop = area.scrollHeight;
+    }
+
+    function updateStats() {
+        document.getElementById('guide-energy').innerText = guide.energy;
+        document.getElementById('guide-credits').innerText = guide.credits;
+        document.getElementById('day-count').innerText = guide.day;
+    }
+
+</script>
+</body>
+</html>
