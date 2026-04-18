@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>塔 - 身份注册系统</title>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --text-color: #c9d1d9;
+            --accent-color: #58a6ff;
+            --danger-color: #f85149;
+            --success-color: #3fb950;
+            --border-color: #30363d;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 注册界面样式 */
+        #registration-overlay {
+            width: 400px;
+            padding: 30px;
+            background: #161b22;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+
+        .input-group {
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            background: #0d1117;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            box-sizing: border-box;
+            margin-top: 5px;
+        }
+
+        /* 游戏主体样式（默认隐藏） */
+        #game-container {
+            display: none;
+            flex-direction: column;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* 之前的样式保持不变... */
+        header { padding: 10px 20px; background: #161b22; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; }
+        main { display: flex; flex: 1; overflow: hidden; }
+        #sentinel-list { width: 300px; border-right: 1px solid var(--border-color); overflow-y: auto; padding: 10px; }
+        .sentinel-card { padding: 10px; border: 1px solid var(--border-color); margin-bottom: 10px; cursor: pointer; }
+        .sentinel-card.active { border-color: var(--accent-color); }
+        #console { flex: 1; display: flex; flex-direction: column; padding: 20px; }
+        #log-area { flex: 1; background: #010409; border: 1px solid var(--border-color); padding: 15px; overflow-y: auto; margin-bottom: 20px; font-size: 14px; }
+        .action-bar { display: flex; gap: 10px; }
+        button { background: #21262d; color: var(--text-color); border: 1px solid var(--border-color); padding: 10px 20px; cursor: pointer; border-radius: 6px; }
+        button.primary { background: var(--accent-color); color: white; border: none; }
+        .progress-bar { height: 4px; background: #21262d; margin-top: 5px; }
+        .progress-fill { height: 100%; background: var(--success-color); }
+    </style>
+</head>
+<body>
+
+<div id="registration-overlay">
+    <h2 style="color: var(--accent-color)">白塔向导身份注册</h2>
+    <p style="font-size: 12px; color: #8b949e">检测到未授权访问，请输入向导密钥信息</p>
+    
+    <div class="input-group">
+        <label>向导姓名:</label>
+        <input type="text" id="reg-name" placeholder="请输入您的姓名...">
+    </div>
+
+    <div class="input-group">
+        <label>所属扇区:</label>
+        <select id="reg-sector">
+            <option value="第一防线">第一防线 (Frontier)</option>
+            <option value="中央塔">中央塔 (Central Tower)</option>
+            <option value="后勤部">后勤部 (Support)</option>
+        </select>
+    </div>
+
+    <button class="primary" style="width: 100%" onclick="completeRegistration()">激活身份并入职</button>
+</div>
+
+<div id="game-container">
+    <header>
+        <div class="stat-group">
+            向导: <span id="guide-name-display" style="color: var(--accent-color)">-</span>
+            扇区: <span id="guide-sector-display">-</span>
+            精力: <span id="guide-energy">100</span>/100
+            信用点: <span id="guide-credits">200</span>
+        </div>
+        <div>第 <span id="day-count">1</span> 天</div>
+    </header>
+
+    <main>
+        <div id="sentinel-list"></div>
+        <div id="console">
+            <div id="log-area"></div>
+            <div class="action-bar">
+                <button id="btn-soothe" class="primary" onclick="handleSoothe()" disabled>精神梳理</button>
+                <button onclick="nextDay()">结束本日工作</button>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    let guide = {
+        name: "",
+        sector: "",
+        energy: 100,
+        credits: 200,
+        day: 1
+    };
+
+    let sentinels = [
+        { id: 1, name: "雷恩", stability: 80, compatibility: 0.9, animal: "雪豹" },
+        { id: 2, name: "凯斯", stability: 45, compatibility: 0.6, animal: "灰狼" }
+    ];
+
+    let selectedId = null;
+
+    // 注册逻辑
+    function completeRegistration() {
+        const nameInput = document.getElementById('reg-name').value;
+        const sectorInput = document.getElementById('reg-sector').value;
+
+        if (!nameInput) {
+            alert("白塔需要您的真实姓名进行备案。");
+            return;
+        }
+
+        guide.name = nameInput;
+        guide.sector = sectorInput;
+
+        // 切换界面
+        document.getElementById('registration-overlay').style.display = 'none';
+        document.getElementById('game-container').style.display = 'flex';
+        
+        // 更新显示
+        document.getElementById('guide-name-display').innerText = guide.name;
+        document.getElementById('guide-sector-display').innerText = guide.sector;
+
+        log(`身份校验通过。欢迎入职，${guide.name} 向导。`);
+        log(`系统已为您分配至 ${guide.sector} 管理岗。`);
+        renderSentinels();
+    }
+
+    function renderSentinels() {
+        const list = document.getElementById('sentinel-list');
+        list.innerHTML = '';
+        sentinels.forEach(s => {
+            const card = document.createElement('div');
+            card.className = `sentinel-card ${s.id === selectedId ? 'active' : ''}`;
+            card.onclick = () => {
+                selectedId = s.id;
+                document.getElementById('btn-soothe').disabled = false;
+                renderSentinels();
+            };
+            card.innerHTML = `
+                <strong>${s.name} (${s.animal})</strong>
+                <div style="font-size: 12px">稳定性: ${s.stability.toFixed(0)}%</div>
+                <div class="progress-bar"><div class="progress-fill" style="width: ${s.stability}%"></div></div>
+            `;
+            list.appendChild(card);
+        });
+    }
+
+    function handleSoothe() {
+        let s = sentinels.find(item => item.id === selectedId);
+        s.stability = Math.min(100, s.stability + 15);
+        guide.energy -= 10;
+        log(`你对 ${s.name} 进行了精神梳理。`);
+        updateStats();
+        renderSentinels();
+    }
+
+    function nextDay() {
+        guide.day++;
+        guide.energy = 100;
+        sentinels.forEach(s => s.stability -= (10 + Math.random()*10));
+        log(`--- 第 ${guide.day} 天 ---`);
+        updateStats();
+        renderSentinels();
+    }
+
+    function log(msg) {
+        const area = document.getElementById('log-area');
+        const entry = document.createElement('div');
+        entry.innerText = `[LOG] ${msg}`;
+        area.appendChild(entry);
+        area.scrollTop = area.scrollHeight;
+    }
+
+    function updateStats() {
+        document.getElementById('guide-energy').innerText = guide.energy;
+        document.getElementById('guide-credits').innerText = guide.credits;
+        document.getElementById('day-count').innerText = guide.day;
+    }
+</script>
+</body>
+</html>
