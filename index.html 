@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>塔 - 向导管理系统 v1.0</title>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --text-color: #c9d1d9;
+            --accent-color: #58a6ff;
+            --danger-color: #f85149;
+            --success-color: #3fb950;
+            --border-color: #30363d;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        /* 顶部状态栏 */
+        header {
+            padding: 10px 20px;
+            background: #161b22;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stat-group span {
+            margin-right: 20px;
+            font-weight: bold;
+        }
+
+        /* 主体布局 */
+        main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* 侧边哨兵列表 */
+        #sentinel-list {
+            width: 300px;
+            border-right: 1px solid var(--border-color);
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .sentinel-card {
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .sentinel-card:hover { background: #1f242c; }
+        .sentinel-card.active { border-color: var(--accent-color); }
+        .sentinel-card.critical { border-color: var(--danger-color); animation: pulse 2s infinite; }
+
+        @keyframes pulse {
+            0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; }
+        }
+
+        /* 中央控制台 */
+        #console {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        #log-area {
+            flex: 1;
+            background: #010409;
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .log-entry { margin-bottom: 5px; border-bottom: 1px dotted #21262d; }
+
+        /* 操作按钮区 */
+        .action-bar {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            background: #21262d;
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 6px;
+        }
+
+        button:hover { background: #30363d; border-color: #8b949e; }
+        button:disabled { opacity: 0.3; cursor: not-allowed; }
+        button.primary { background: var(--accent-color); color: white; border: none; }
+
+        .progress-bar {
+            height: 4px;
+            background: #21262d;
+            margin-top: 5px;
+        }
+        .progress-fill { height: 100%; background: var(--success-color); transition: width 0.3s; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="stat-group">
+        向导编号: <span id="guide-id">G-2026</span>
+        等级: <span id="guide-level">C</span>
+        精力: <span id="guide-energy">100</span>/100
+        精神力: <span id="guide-mp">50</span>
+        信用点: <span id="guide-credits">200</span>
+    </div>
+    <div>第 <span id="day-count">1</span> 天</div>
+</header>
+
+<main>
+    <div id="sentinel-list">
+        </div>
+
+    <div id="console">
+        <div id="log-area">
+            <div class="log-entry">[系统] 欢迎回到塔。请选择一名哨兵开始梳理。</div>
+        </div>
+        <div class="action-bar">
+            <button id="btn-soothe" class="primary" onclick="handleSoothe()" disabled>精神梳理 (-10精力)</button>
+            <button onclick="nextDay()">结束本日工作 (日结)</button>
+            <button onclick="saveGame()">保存存档</button>
+        </div>
+    </div>
+</main>
+
+<script>
+    // --- 初始数据 ---
+    let guide = {
+        level: 1, // 1=C, 2=B, 3=A, 4=S
+        energy: 100,
+        mp: 50,
+        credits: 200,
+        day: 1
+    };
+
+    let sentinels = [
+        { id: 101, name: "雷恩", stability: 80, compatibility: 0.9, animal: "雪豹", status: "空闲" },
+        { id: 102, name: "凯斯", stability: 45, compatibility: 0.6, animal: "灰狼", status: "焦虑" },
+        { id: 103, name: "莫尔", stability: 20, compatibility: 0.4, animal: "响尾蛇", status: "濒临失控" }
+    ];
+
+    let selectedId = null;
+
+    // --- 核心逻辑 ---
+
+    // 初始化界面
+    function init() {
+        renderSentinels();
+        updateStats();
+    }
+
+    // 渲染哨兵列表
+    function renderSentinels() {
+        const list = document.getElementById('sentinel-list');
+        list.innerHTML = '';
+        sentinels.forEach(s => {
+            const card = document.createElement('div');
+            card.className = `sentinel-card ${s.id === selectedId ? 'active' : ''} ${s.stability < 30 ? 'critical' : ''}`;
+            card.onclick = () => selectSentinel(s.id);
+            
+            card.innerHTML = `
+                <strong>${s.name} (${s.animal})</strong>
+                <div style="font-size: 12px; color: #8b949e">稳定性: ${s.stability.toFixed(0)}%</div>
+                <div class="progress-bar"><div class="progress-fill" style="width: ${s.stability}%"></div></div>
+            `;
+            list.appendChild(card);
+        });
+    }
+
+    // 选择哨兵
+    function selectSentinel(id) {
+        selectedId = id;
+        document.getElementById('btn-soothe').disabled = false;
+        renderSentinels();
+    }
+
+    // 安抚逻辑
+    function handleSoothe() {
+        if (guide.energy < 10) {
+            log("警告：精力不足，无法进行高强度精神介入。");
+            return;
+        }
+
+        let s = sentinels.find(item => item.id === selectedId);
+        // 恢复公式：(基础值15 * 向导等级) * 匹配度
+        let recovery = (15 * guide.level) * s.compatibility;
+        s.stability = Math.min(100, s.stability + recovery);
+        
+        guide.energy -= 10;
+        guide.mp -= 5;
+        guide.credits += 20; // 完成工作获得报酬
+
+        log(`你引导精神触手梳理了 ${s.name} 的意识图景。稳定性回升至 ${s.stability.toFixed(0)}%。`);
+        updateStats();
+        renderSentinels();
+    }
+
+    // 日结逻辑
+    function nextDay() {
+        guide.day++;
+        guide.energy = 100; // 休息恢复体力
+        
+        log(`--- 第 ${guide.day} 天晨报 ---`);
+        
+        sentinels.forEach((s, index) => {
+            // 每日自动下降：基础下降10 + 随机波动
+            let decline = 10 + Math.random() * 10;
+            s.stability -= decline;
+
+            if (s.stability <= 0) {
+                log(`[失控报告] 哨兵 ${s.name} 稳定性归零，已从塔中撤离。`, 'danger');
+                sentinels.splice(index, 1);
+            }
+        });
+
+        if (sentinels.length < 3) {
+            // 简单补充一个新哨兵
+            sentinels.push({ 
+                id: Date.now(), 
+                name: "新人" + Math.floor(Math.random()*100), 
+                stability: 70, 
+                compatibility: Math.random().toFixed(1), 
+                animal: "未知生物", 
+                status: "待定" 
+            });
+        }
+
+        updateStats();
+        renderSentinels();
+    }
+
+    // 通用工具
+    function log(msg, type = '') {
+        const area = document.getElementById('log-area');
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        if (type === 'danger') entry.style.color = 'var(--danger-color)';
+        entry.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        area.appendChild(entry);
+        area.scrollTop = area.scrollHeight;
+    }
+
+    function updateStats() {
+        document.getElementById('guide-energy').innerText = guide.energy;
+        document.getElementById('guide-mp').innerText = guide.mp;
+        document.getElementById('guide-credits').innerText = guide.credits;
+        document.getElementById('day-count').innerText = guide.day;
+        document.getElementById('guide-level').innerText = guide.level === 1 ? 'C' : 'B';
+    }
+
+    function saveGame() {
+        const data = { guide, sentinels };
+        localStorage.setItem('guide_save', JSON.stringify(data));
+        log("系统数据已同步至本地存储。");
+    }
+
+    // 启动
+    init();
+
+</script>
+</body>
+</html>
